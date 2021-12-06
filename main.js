@@ -118,14 +118,18 @@ async function testReplay(logPath) {
         console.log('ok');
       }
     },
-    afterEach: async (_, response) => {
+    afterEach: async ({sent}, response) => {
       if (Object.keys(response).length) console.log(response);
 
       // Artifical delay, give Chrome some time to think.
       await new Promise(resolve => setTimeout(resolve, 50));
 
-      // Try to get installable errors, see exactly when it starts to hang.
-      await getInstallabilityErrors(lhSession);
+      // Kinda hacky, but don't try installability errors until we have sent Runtime.runIfWaitingForDebugger
+      // to the s_w target, which has happened by command #60 in all logs.
+      if (sent.id > 60) {
+        // Try to get installable errors, see exactly when it starts to hang.
+        await getInstallabilityErrors(lhSession);
+      }
     },
   });
 
