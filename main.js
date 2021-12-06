@@ -26,9 +26,6 @@ function loadLog(pathToLog, opts) {
     if (params.targetId) {
       params.targetId = savedTargetIdToNew.get(params.targetId);
     }
-    if (params.sessionId) {
-      params.sessionId = savedSessionIdToNew.get(params.sessionId);
-    }
     if (params.frameId) {
       params.frameId = savedFrameIdToNew.get(params.frameId);
     }
@@ -39,17 +36,22 @@ function loadLog(pathToLog, opts) {
 
   return {
     commandsSent,
-    savedTargetIdToNew,
-    savedSessionIdToNew,
-    async replay(session) {
-      session.on('ServiceWorker.workerRegistrationUpdated', console.log);
-      
+    async replay(mainSession, browserContext) {
+      mainSession.on('Target.attachedToTarget', (event) => {
+        const savedAttachedToTargetEvent =
+          log.find((entry) => entry.type === 'evt' && entry.params?.targetInfo?.url === event.targetInfo.url);
+        savedSessionIdToNew.set(savedAttachedToTargetEvent.params.sessionId, event.sessionId);
+      });
+
       for (const { sent, recieved } of commandsSent) {
         const params = { ...sent.params };
         replace(params);
 
         if (beforeEach) await beforeEach({sent, recieved});
-    
+
+        const session = sent.sessionId ?
+          browserContext._connection._sessions.get(savedSessionIdToNew.get(sent.sessionId)) :
+          mainSession;
         const response = await session.send(sent.method, params);
     
         if (sent.method === 'Target.getTargetInfo') {
@@ -103,6 +105,7 @@ async function testReplay(logPath) {
       if (sent.method.startsWith('IO.')) return false;
       if (sent.method.startsWith('Log.')) return false;
       if (sent.method.startsWith('Network.') && sent.method !== 'Network.enable') return false;
+      if (sent.method.startsWith('Page.captureScreenshot')) return false;
       if (sent.method.startsWith('Profiler.')) return false;
       if (sent.method.startsWith('Runtime.callFunctionOn')) return false;
       if (sent.method.startsWith('Runtime.evaluate')) return false;
@@ -111,6 +114,7 @@ async function testReplay(logPath) {
     },
     beforeEach: async ({sent}) => {
       console.log(sent.id, sent.method);
+      // console.log(sent.params);
 
       if (sent.method === 'Page.getInstallabilityErrors') {
         console.log('wait ...');
@@ -133,7 +137,7 @@ async function testReplay(logPath) {
     },
   });
 
-  await lhLog.replay(lhSession);
+  await lhLog.replay(lhSession, page.browserContext());
 
   console.log('done replaying');
 
