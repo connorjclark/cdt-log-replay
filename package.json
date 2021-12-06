@@ -1,0 +1,9 @@
+{
+  "name": "cdt-installable-hang",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "devDependencies": {
+    "puppeteer": "^12.0.1"
+  }
+}
